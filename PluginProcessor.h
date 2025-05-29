@@ -1,12 +1,28 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "juce_audio_devices/juce_audio_devices.h"
+#include <juce_dsp/juce_dsp.h>
+#include <atomic> // Ensure atomic is included
 
 //==============================================================================
-class AudioPluginAudioProcessor final : public juce::AudioProcessor
+class AudioPluginAudioProcessor final : public juce::AudioProcessor,
+                                        public juce::AudioProcessorValueTreeState::Listener
 {
 public:
     //==============================================================================
+    // Public for easy access from PluginEditor, or use getter methods
+    std::atomic<float> inputLevelDb { -100.0f };
+    std::atomic<float> outputLevelDb { -100.0f };
+    std::atomic<float> gainReductionDb { 0.0f }; // Typically 0 or negative
+
+    juce::AudioDeviceManager deviceManager;
+    juce::String currentInputDeviceName;
+    juce::String currentOutputDeviceName;
+
+    juce::AudioProcessorValueTreeState parameters;
+    juce::UndoManager undoManager;
+
     AudioPluginAudioProcessor();
     ~AudioPluginAudioProcessor() override;
 
@@ -42,7 +58,34 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    //==============================================================================
+    // APVTS Listener callback
+    void parameterChanged (const juce::String& parameterID, float newValue) override;
+
 private:
     //==============================================================================
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    
+    juce::StringArray getAvailableInputDeviceNames();
+    juce::StringArray getAvailableOutputDeviceNames();
+    void updateDeviceSettingsFromParameters(); 
+
+    // DSP Objects
+    juce::dsp::Compressor<float> compressor;
+    juce::dsp::Limiter<float> limiter;
+    juce::dsp::ProcessSpec spec;
+
+    // Atomic parameter pointers for DSP
+    std::atomic<float>* compThresholdParam = nullptr;
+    std::atomic<float>* compRatioParam = nullptr;
+    std::atomic<float>* compAttackParam = nullptr;
+    std::atomic<float>* compReleaseParam = nullptr;
+    std::atomic<float>* compMakeupGainParam = nullptr;
+    std::atomic<float>* compBypassParam = nullptr;
+
+    std::atomic<float>* limThresholdParam = nullptr;
+    std::atomic<float>* limReleaseParam = nullptr;
+    std::atomic<float>* limBypassParam = nullptr;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };
